@@ -20,7 +20,7 @@ const schema = new mongoose.Schema({
         type: String
     },
     timeline: {
-        type: Number
+        type: String
     },
     releasedate: {
         type: String
