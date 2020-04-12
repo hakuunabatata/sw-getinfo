@@ -1,8 +1,9 @@
 const puppeteer = require("puppeteer");
-const fs = require("fs");
+const Media = require("./models/media");
 
 (async () => {
-  media = []
+  data = await Media.find()
+  oldurls = data.map(model => model.toObject().url)
   baseUrl = "https://starwars.fandom.com/wiki/";
   universes = ["canon", "Legends"];
   browser = await puppeteer.launch({ headless: false });
@@ -49,47 +50,48 @@ const fs = require("fs");
         .map((i, e) => $(e).attr("class").replace("unpublished ", ""))
         .toArray()
     );
+    objs = []
     for (i in title) {
-      if (!title[i].includes("page does not exist")) {
-        await page.goto(baseUrl + title[i]);
-        if (timeline[i] == "") {
-          timeline[i] = timeline[i - 1];
-        }
-        media.push({
-          id: i,
+      if (timeline[i] == "") {
+        timeline[i] = timeline[i - 1];
+      }
+      if (!oldurls.includes(title[i])) {
+              objs.push({
+                title: title[i],
+                media: type[i],
+                releasedate: releasedate[i],
+                creator: creator[i],
+                timeline: timeline[i]
+              })
+      }else{
+        console.log(`...${title[i]} already included`)
+      }
+    }
+    for (i in objs) {
+      const { title, type, releasedate, creator, timeline} = objs[i]
+      if (!title.includes("page does not exist")) {
+        console.log(`...${title} appending`);
+        await page.goto(baseUrl + title);
+        url = baseUrl + title
+        try{
+        await Media.create( {
+          ...objs[i],
           title: await page.evaluate(() =>
             $(".pi-theme-Media .pi-title").text()
           ),
-          type: type[i],
+          series: await page.evaluate(() =>
+            $('.pi-theme-Media .pi-item[data-source="series"] a').text()
+          ),
           universe: universes[x].toLowerCase(),
-          creator: creator[i],
-          timeline: Number(timeline[i]),
-          releasedate: releasedate[i],
           image: await page.evaluate(() =>
             $(".pi-theme-Media img").attr("src")
           ),
-        });
-        // console.log(`
-        //   ===================${i}====================
-        //   Title: ${media[i].title},
-        //   Type: ${type[i]},
-        //   Universe: ${universes[x]},
-        //   Creator: ${creator[i]},
-        //   Timeline: ${timeline[i]},
-        //   Release Date: ${releasedate[i]}
-        //   Image: ${media[i].image}
-        //   `);
-        fs.writeFile(
-          __dirname + "/media.json",
-          JSON.stringify(media),
-          "utf-8",
-          (err, data) => {
-            if (err) throw err;
-            ("ERROR");
-          }
-        );
+          url
+        })}catch(err){
+          
+        }
       } else {
-        console.log(`${title[i]}`);
+        console.log(`...${title}`);
       }
     }
   }
