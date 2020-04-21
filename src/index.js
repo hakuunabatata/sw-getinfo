@@ -30,19 +30,9 @@ const Media = require("./models/media");
         )
         .toArray()
     );
-    timeline = timeline.map((element) =>
-      element.includes("BBY")
-        ? Number(element.split(" ")[0].split("-")[0]) * -1
-        : Number(element.split(" ")[0].split("-")[0])
-    );
     title = await page.evaluate(() =>
       $(".sortable.jquery-tablesorter tbody tr")
         .map((i, e) => $(e).find("td:eq(2) a").attr("title"))
-        .toArray()
-    );
-    creator = await page.evaluate(() =>
-      $(".sortable.jquery-tablesorter tbody tr")
-        .map((i, e) => $(e).find("td:eq(3) a").text())
         .toArray()
     );
     releasedate = await page.evaluate(() =>
@@ -57,15 +47,37 @@ const Media = require("./models/media");
     );
     objs = [];
     for (i in title) {
-      if (timeline[i] == "") {
+      if ([null, ""].includes(timeline[i])) {
         timeline[i] = timeline[i - 1];
+      } else {
+        value = Number(timeline[i].split(" ")[0].split("–")[0]);
+        multiply = timeline[i].includes("BBY") ? -1 : 1;
+        if (value == 0) {
+          value = 0.1;
+        }
+        timeline[i] = multiply * value;
+      }
+      if (title[i].replace("_", " ").includes("A New Hope")) {
+        timeline[i] = 0;
+      }
+      if (
+        [
+          "novel",
+          "gamebook",
+          "young",
+          "adventure",
+          "junior",
+          "short",
+          "short story",
+        ].includes(type[i])
+      ) {
+        type[i] = "book";
       }
       if (!oldurls.includes(title[i])) {
         objs.push({
           media: type[i],
           releasedate: releasedate[i],
-          creator: creator[i],
-          timeline: timeline[i],
+          timeline: Number(timeline[i]),
           title: title[i],
         });
       } else {
@@ -73,30 +85,41 @@ const Media = require("./models/media");
       }
     }
     for (i in objs) {
-      const { title, type, releasedate, creator, timeline } = objs[i];
+      const { title } = objs[i];
       console.log(
         `<==-.=.=.=.=.=.=.=.=.-==>${
           Number(i) + Number(oldurls.length) * 1
         }<==-.=.=.=.=.=.=.=.=.-==>`
       );
       if (!title.includes("page does not exist")) {
-        console.log(`...${title} appending`);
         await page.goto(baseUrl + title);
+        image = await page.evaluate(() => $(".pi-theme-Media img").attr("src"));
+        if (["", null].includes(image)) {
+          image =
+            "https://vignette.wikia.nocookie.net/starwars/images/4/42/StarWarsOpeningLogo.svg/revision/latest?cb=20120211213511";
+        }
         url = title;
         await Media.create({
-          title: await page.evaluate(() =>
-            $(".pi-theme-Media .pi-title").text()
-          ),
           ...objs[i],
-          series: await page.evaluate(() =>
-            $('.pi-theme-Media .pi-item[data-source="series"] a').text()
+          title: await page.evaluate(
+            () =>
+              $(".page-header__title")
+                .text()
+                .replace("Star Wars:", "")
+                .split("(")[0]
+          ),
+          series: await page.evaluate(
+            () =>
+              $('.pi-theme-Media .pi-item[data-source="series"] .pi-data-value')
+                .text()
+                .replace("Star Wars:", "")
+                .split("[")[0]
           ),
           universe: universes[x].toLowerCase(),
-          image: await page.evaluate(() =>
-            $(".pi-theme-Media img").attr("src")
-          ),
+          image,
           url,
         });
+        console.log(`...${title} appending`);
       } else {
         console.log(`...${title}`);
       }
